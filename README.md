@@ -114,6 +114,6 @@ curl -X 'POST' \
 
 ## Links
 
-MagicAPI Marketplace: (https://api.market/store/bridgeml/text-to-image)
-Next.js Documentation: (https://nextjs.org/docs)
-Tailwind CSS Documentation: (https://tailwindcss.com/docs)
+- MagicAPI Marketplace: (https://api.market/store/bridgeml/text-to-image)
+- Next.js Documentation: (https://nextjs.org/docs)
+- Tailwind CSS Documentation: (https://tailwindcss.com/docs)

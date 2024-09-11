@@ -1,17 +1,18 @@
 "use client";
 import Head from "next/head";
-// import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useLogs } from "./context/LogContext";
+import { ClipLoader } from "react-spinners";
 
 export default function Home() {
   const { logs, addLog } = useLogs();
   const [prompt, setPrompt] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [generationTime, setGenerationTime] = useState<number | null>(null); // State for generation time
+  const [generationTime, setGenerationTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [imageLoading, setImageLoading] = useState<boolean>(false);
   const [visibleHistoryCount, setVisibleHistoryCount] = useState<number>(5);
   const [apiUsage, setApiUsage] = useState<{
     used: number;
@@ -70,11 +71,11 @@ export default function Home() {
     setError(null);
     setIsLoading(true);
 
-    const startTime = performance.now(); // Start time
+    const startTime = performance.now();
 
     if (cache.current.has(prompt)) {
       const cachedImageUrl = cache.current.get(prompt)!;
-      const generationTime = performance.now() - startTime; // Calculate duration
+      const generationTime = performance.now() - startTime;
       setImageUrl(cachedImageUrl);
       setGenerationTime(generationTime);
       addLog({
@@ -84,6 +85,7 @@ export default function Home() {
         generationTime,
       });
       setIsLoading(false);
+      setPrompt(""); // Clear the input field
       return;
     }
 
@@ -97,7 +99,7 @@ export default function Home() {
       });
 
       const data = await response.json();
-      const generationTime = performance.now() - startTime; // Calculate duration
+      const generationTime = performance.now() - startTime;
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to generate image");
@@ -106,14 +108,16 @@ export default function Home() {
       cache.current.set(prompt, data.imageUrl);
       setImageUrl(data.imageUrl);
       setGenerationTime(generationTime);
+      setImageLoading(true);
       addLog({
         prompt,
         status: "Success",
         imageUrl: data.imageUrl,
         generationTime,
       });
+      setPrompt(""); // Clear the input field after successful generation
     } catch (error: unknown) {
-      const generationTime = performance.now() - startTime; // Calculate duration
+      const generationTime = performance.now() - startTime;
 
       if (error instanceof Error) {
         setError(error.message);
@@ -124,7 +128,6 @@ export default function Home() {
           generationTime,
         });
       } else {
-        // Handle the case where error is not an instance of Error
         const unknownError = "An unknown error occurred";
         setError(unknownError);
         addLog({
@@ -140,10 +143,18 @@ export default function Home() {
   };
 
   const downloadImage = (url: string) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.setAttribute("download", "generated-image.jpg");
-    a.click();
+    fetch(url)
+      .then((response) => response.blob())
+      .then((blob) => {
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "generated-image.jpg"); // or the desired file name and extension
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode?.removeChild(link);
+      })
+      .catch(() => setError("Failed to download image"));
   };
 
   const getApiUsageColor = (
@@ -155,6 +166,8 @@ export default function Home() {
     if (percentageUsed < 80) return "text-yellow-600";
     return "text-red-600";
   };
+
+  const shouldDisplayHistory = logs.some((log) => log.imageUrl);
 
   return (
     <>
@@ -206,10 +219,18 @@ export default function Home() {
         {imageUrl && (
           <div className="mt-6 text-center">
             <h2 className="text-xl font-semibold">Generated Image:</h2>
+            {imageLoading && (
+              <div className="flex justify-center mt-4">
+                <ClipLoader color="#36d7b7" size={50} />
+              </div>
+            )}
             <img
               src={imageUrl}
               alt="Generated"
-              className="mt-4 mx-auto shadow-md rounded-lg"
+              className={`mt-4 mx-auto shadow-md rounded-lg transition-opacity duration-500 ease-in-out ${
+                imageLoading ? "opacity-0" : "opacity-100"
+              }`}
+              onLoad={() => setImageLoading(false)}
             />
             {generationTime !== null && (
               <p className="text-gray-600 mt-2">
@@ -225,52 +246,54 @@ export default function Home() {
           </div>
         )}
 
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">History:</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {logs.slice(0, visibleHistoryCount).map((item, index) => (
-              <div
-                key={index}
-                className="border p-4 rounded-lg shadow-md flex flex-col"
-              >
-                <p className="font-semibold mb-4 capitalize">
-                  User Prompt:{" "}
-                  <span className="font-normal ">{item.prompt}</span>
-                </p>
-                {item.imageUrl && (
-                  <img
-                    src={item.imageUrl}
-                    alt={`Generated from: ${item.prompt}`}
-                    className="rounded-lg shadow-md w-full"
-                  />
-                )}
-                <p className="mt-4">Status: {item.status}</p>
-                {item.generationTime !== undefined && (
-                  <p className="text-gray-600 mt-2">
-                    Generation Time: {item.generationTime.toFixed(2)} ms
+        {imageUrl && shouldDisplayHistory && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold mb-4">History:</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {logs.slice(0, visibleHistoryCount).map((item, index) => (
+                <div
+                  key={index}
+                  className="border p-4 rounded-lg shadow-md flex flex-col"
+                >
+                  <p className="font-semibold mb-4 capitalize">
+                    User Prompt:{" "}
+                    <span className="font-normal ">{item.prompt}</span>
                   </p>
-                )}
-                {item.status === "Success" && (
-                  <button
-                    onClick={() => downloadImage(item.imageUrl!)}
-                    className="mt-2 bg-green-500 text-white py-1 px-2 rounded"
-                  >
-                    Download
-                  </button>
-                )}
-                {item.status === "Failed" && (
-                  <p className="text-red-500">Error: {item.error}</p>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {visibleHistoryCount < logs.length && (
-            <div id="load-more" className="mt-4 text-center">
-              <p className="text-blue-500">Loading more...</p>
+                  {item.imageUrl && (
+                    <img
+                      src={item.imageUrl}
+                      alt={`Generated from: ${item.prompt}`}
+                      className="rounded-lg shadow-md w-full lazyload"
+                    />
+                  )}
+                  <p className="mt-4">Status: {item.status}</p>
+                  {item.generationTime !== undefined && (
+                    <p className="text-gray-600 mt-2">
+                      Generation Time: {item.generationTime.toFixed(2)} ms
+                    </p>
+                  )}
+                  {item.status === "Success" && (
+                    <button
+                      onClick={() => downloadImage(item.imageUrl!)}
+                      className="mt-2 bg-green-500 text-white py-1 px-2 rounded"
+                    >
+                      Download
+                    </button>
+                  )}
+                  {item.status === "Failed" && (
+                    <p className="text-red-500">Error: {item.error}</p>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+
+            {visibleHistoryCount < logs.length && (
+              <div id="load-more" className="mt-4 text-center">
+                <p className="text-blue-500">Loading more...</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

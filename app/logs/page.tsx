@@ -44,7 +44,7 @@ export default function Logs() {
                 <img
                   src={log.imageUrl}
                   alt={`Generated from: ${log.prompt}`}
-                  className="w-1/12 h-auto rounded-lg shadow-md ml-auto"
+                  className="md:w-1/12 sm:w-full h-auto rounded-lg shadow-md ml-auto"
                 />
               )}
             </div>
